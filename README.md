@@ -13,8 +13,6 @@ Reply & delete options for messages
 
 Online users list & typing indicators
 
-MongoDB persistence for chat history
-
 Responsive design (desktop & mobile)
 
 # 🛠 Tech Stack
