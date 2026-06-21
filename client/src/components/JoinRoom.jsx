@@ -2,6 +2,7 @@ import React, { useContext, useState } from "react";
 import axios from "axios";
 import { context } from "../context/context";
 import "../styles/JoinRoom.css";
+import { BACKEND_URL } from "../config";
 
 function JoinRoom() {
   const [roomId, setRoomId] = useState("");
@@ -17,7 +18,7 @@ function JoinRoom() {
     }
 
     try {
-      const res = await axios.post("https://chatroombackend-unv4.onrender.com/api/rooms/join", {
+      const res = await axios.post(`${BACKEND_URL}/api/rooms/join`, {
         roomId,
         username,
         password,

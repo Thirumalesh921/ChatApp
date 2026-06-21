@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { context } from "../context/context";
 import "../styles/ChatRoom.css";
+import { BACKEND_URL } from "../config";
 
 export default function ChatRoom() {
   const { auth, setAuth } = useContext(context);
@@ -34,7 +35,7 @@ export default function ChatRoom() {
   useEffect(() => {
     if (!roomId || !username) return;
 
-    const socket = io("https://chatroombackend-unv4.onrender.com");
+    const socket = io(`${BACKEND_URL}`);
     socketRef.current = socket;
 
     socket.emit("join-room", { roomId, username });
