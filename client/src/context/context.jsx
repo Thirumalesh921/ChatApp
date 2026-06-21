@@ -5,7 +5,7 @@ export const AuthProvider = ({ children }) => {
     const storedAuth = localStorage.getItem("auth");
     return storedAuth
       ? JSON.parse(storedAuth)
-      : { username: null, roomId: null };
+      : { username: null, roomId: null, token: null };
   });
   useEffect(() => {
     if (auth && auth.username) {

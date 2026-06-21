@@ -3,15 +3,15 @@ const Room = require("./models/Room");
 
 function socketHandler(io) {
   io.on("connection", (socket) => {
-    console.log("🟢 New client connected:", socket.id);
+    console.log("New client connected:", socket.id);
 
-    socket.on("join-room", async ({ roomId, username }) => {
+    socket.on("join-room", async () => {
+      const roomId = socket.roomId;
+      const username = socket.username;
       socket.join(roomId);
-      socket.roomId = roomId;
-      socket.username = username;
 
       try {
-        const messages = await Message.find({ roomId }).sort({ createdAt: 1 });
+        const messages = await Message.find({ roomId });
         const hydrated = [];
 
         for (let msg of messages) {
@@ -37,80 +37,107 @@ function socketHandler(io) {
 
         socket.emit("room-history", hydrated);
 
-        const room = await Room.findOne({ roomId });
-        if (room && !room.users.includes(username)) {
-          room.users.push(username);
-          await room.save();
+        // FIX: guard against a missing room instead of crashing on room.users
+        const room = await Room.findOneAndUpdate(
+          { roomId },
+          { $addToSet: { users: username } },
+          { new: true }
+        );
+
+        if (room) {
+          io.to(roomId).emit("online-users", room.users);
+        } else {
+          console.error(`join-room: no Room found for roomId ${roomId}`);
         }
-        io.to(roomId).emit("online-users", room.users);
       } catch (err) {
-        console.error("❌ Failed to join room:", err);
+        console.error("Failed to join room:", err);
       }
     });
 
-    socket.on(
-      "send-message",
-      async ({ roomId, username, message, replyTo }) => {
-        try {
-          const newMessage = new Message({
-            roomId,
-            username,
-            content: message,
-            replyTo: replyTo ? replyTo.id : null,
-          });
-          await newMessage.save();
-
-          let replyData = null;
-          if (replyTo && replyTo.id) {
-            const repliedMsg = await Message.findById(replyTo.id);
-            if (repliedMsg) {
-              replyData = {
-                id: repliedMsg._id,
-                username: repliedMsg.username,
-                content: repliedMsg.content,
-              };
-            }
-          }
-
-          io.to(roomId).emit("receive-message", {
-            id: newMessage._id,
-            username,
-            content: newMessage.content,
-            timestamp: newMessage.createdAt,
-            replyTo: replyData,
-          });
-        } catch (err) {
-          console.error("❌ Error saving message:", err);
-        }
-      }
-    );
-
-    socket.on("delete-message", async ({ roomId, msgId }) => {
+    socket.on("send-message", async ({ message, replyTo }) => {
+      const roomId = socket.roomId;
+      const username = socket.username;
       try {
+        const newMessage = new Message({
+          roomId,
+          username,
+          content: message,
+          sessionId: socket.sessionId,
+          replyTo: replyTo ? replyTo.id : null,
+        });
+        await newMessage.save();
+
+        let replyData = null;
+        if (replyTo && replyTo.id) {
+          const repliedMsg = await Message.findById(replyTo.id);
+          if (repliedMsg) {
+            replyData = {
+              id: repliedMsg._id,
+              username: repliedMsg.username,
+              content: repliedMsg.content,
+            };
+          }
+        }
+
+        io.to(roomId).emit("receive-message", {
+          id: newMessage._id,
+          username,
+          content: newMessage.content,
+          timestamp: newMessage.createdAt,
+          replyTo: replyData,
+        });
+      } catch (err) {
+        console.error("Error saving message:", err);
+      }
+    });
+
+    // FIX: use an ack callback so the client actually learns about failures
+    socket.on("delete-message", async ({ msgId }, callback) => {
+      const roomId = socket.roomId;
+      try {
+        const msg = await Message.findById(msgId);
+
+        if (!msg) {
+          return callback?.({ error: "Message not found" });
+        }
+
+        if (msg.sessionId !== socket.sessionId) {
+          return callback?.({ error: "You can't delete others' messages" });
+        }
+
         await Message.findByIdAndDelete(msgId);
         io.to(roomId).emit("delete-message", msgId);
+        callback?.({ success: true });
       } catch (err) {
-        console.error("❌ Error deleting message:", err);
+        console.error("Error deleting message:", err);
+        callback?.({ error: "Server error" });
       }
     });
 
-    socket.on("typing", ({ roomId, username }) => {
-      socket.to(roomId).emit("user-typing", username);
+    socket.on("typing", () => {
+      socket.to(socket.roomId).emit("user-typing", socket.username);
     });
 
-    socket.on("stop-typing", ({ roomId, username }) => {
-      socket.to(roomId).emit("user-stop-typing", username);
+    socket.on("stop-typing", () => {
+      socket.to(socket.roomId).emit("user-stop-typing", socket.username);
     });
 
+    // FIX: removed duplicate query / shadowed `room` variable, restored the guard
     socket.on("disconnect", async () => {
       const { roomId, username } = socket;
-      if (roomId && username) {
-        const room = await Room.findOne({ roomId });
+      if (!roomId || !username) return;
+
+      try {
+        const room = await Room.findOneAndUpdate(
+          { roomId },
+          { $pull: { users: username } },
+          { new: true }
+        );
         if (room) {
-          room.users = room.users.filter((u) => u !== username);
-          await room.save();
           io.to(roomId).emit("online-users", room.users);
         }
+      } catch (err) {
+        console.error("Error updating room on disconnect:", err);
       }
     });
   });

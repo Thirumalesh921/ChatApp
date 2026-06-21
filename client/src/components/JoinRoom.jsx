@@ -25,7 +25,12 @@ function JoinRoom() {
       });
 
       const userFromServer = res.data.details.username;
-      setAuth({ username: userFromServer, roomId });
+      const authToken = res.data.token;
+      setAuth({
+        username: userFromServer,
+        roomId,
+        token: authToken,
+      });
     } catch (err) {
       setError(err.response?.data?.error || "Something went wrong");
     }

@@ -8,8 +8,11 @@ const messageSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Message",
     default: null,
-  }, // 👈 add this
+  },
+  sessionId: { type: String, required: true },
   createdAt: { type: Date, default: Date.now, expires: 60 * 60 * 72 },
 });
+
+messageSchema.index({ roomId: 1, createdAt: 1 });
 
 module.exports = mongoose.model("Message", messageSchema);

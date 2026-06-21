@@ -2,6 +2,8 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const Room = require("../models/Room");
 const router = express.Router();
+const jwt = require("jsonwebtoken");
+const { v4: uuidv4 } = require("uuid");
 
 // Join or Create Room
 router.post("/join", async (req, res) => {
@@ -21,8 +23,16 @@ router.post("/join", async (req, res) => {
         users: [username],
       });
 
+      const sessionId = uuidv4();
+      const token = jwt.sign(
+        { roomId, username, sessionId },
+        process.env.JWT_SECRET,
+        { expiresIn: "72h" }
+      );
+
       return res.json({
         details: { roomid: roomId, username },
+        token: token,
         message: "Room created and joined.",
       });
     }
@@ -41,10 +51,28 @@ router.post("/join", async (req, res) => {
     room.users.push(username);
     await room.save();
 
+    const sessionId = uuidv4();
+
+    const token = jwt.sign(
+      {
+        roomId,
+        username,
+        sessionId,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "72h",
+      }
+    );
+
     return res.json({
-      details: { roomid: roomId, username },
-      message: "Joined existing room.",
+      token,
+      details: {
+        roomId,
+        username,
+      },
     });
+
   } catch (err) {
     console.error("Error in /join route:", err);
     return res.status(500).json({ error: "Server error. Please try again." });

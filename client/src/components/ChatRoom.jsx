@@ -35,10 +35,12 @@ export default function ChatRoom() {
   useEffect(() => {
     if (!roomId || !username) return;
 
-    const socket = io(`${BACKEND_URL}`);
+    const socket = io(`${BACKEND_URL}`, {
+      auth: { token: auth.token }
+    });
     socketRef.current = socket;
 
-    socket.emit("join-room", { roomId, username });
+    socket.emit("join-room");
 
     socket.on("room-history", setMessages);
     socket.on("receive-message", (msg) =>
@@ -68,8 +70,6 @@ export default function ChatRoom() {
   const sendMessage = () => {
     if (!message.trim()) return;
     socketRef.current.emit("send-message", {
-      roomId,
-      username,
       message,
       replyTo: replyingTo,
     });
@@ -80,11 +80,11 @@ export default function ChatRoom() {
   // 🔹 Handle typing
   const handleTyping = (e) => {
     setMessage(e.target.value);
-    socketRef.current.emit("typing", { roomId, username });
+    socketRef.current.emit("typing");
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      socketRef.current.emit("stop-typing", { roomId, username });
+      socketRef.current.emit("stop-typing");
     }, 1500);
   };
 
@@ -93,7 +93,11 @@ export default function ChatRoom() {
 
   // 🔹 Delete message
   const handleDelete = (msgId) => {
-    socketRef.current.emit("delete-message", { roomId, msgId });
+    socketRef.current.emit("delete-message", { msgId }, (response) => {
+      if (response?.error) {
+        console.error(response.error);
+      }
+    });
     setMenuOpenId(null);
   };
 
