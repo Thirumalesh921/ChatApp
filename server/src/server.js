@@ -5,6 +5,8 @@ const socketHandler = require("./socket");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 
+// Sample Comment
+
 dotenv.config();
 mongoose
   .connect(process.env.MONGO_URL)
